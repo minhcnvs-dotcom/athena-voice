@@ -232,22 +232,15 @@
       height: 6px;
       background: var(--accent-cyan);
       border-radius: 4px;
-      transition: height 0.15s ease, background 0.3s;
+      transition: height 0.15s ease;
     }
 
     .speaking .visualizer .bar {
       animation: wave 0.8s ease-in-out infinite alternate;
     }
 
-    .speaking .visualizer .bar:nth-child(1) { animation-delay: 0.1s; }
-    .speaking .visualizer .bar:nth-child(2) { animation-delay: 0.3s; }
-    .speaking .visualizer .bar:nth-child(3) { animation-delay: 0.2s; }
-    .speaking .visualizer .bar:nth-child(4) { animation-delay: 0.4s; }
-    .speaking .visualizer .bar:nth-child(5) { animation-delay: 0.2s; }
-    .speaking .visualizer .bar:nth-child(6) { animation-delay: 0.5s; }
-    .speaking .visualizer .bar:nth-child(7) { animation-delay: 0.1s; }
-    .speaking .visualizer .bar:nth-child(8) { animation-delay: 0.3s; }
-    .speaking .visualizer .bar:nth-child(9) { animation-delay: 0.2s; }
+    .speaking .visualizer .bar:nth-child(2n) { animation-delay: 0.3s; }
+    .speaking .visualizer .bar:nth-child(3n) { animation-delay: 0.5s; }
 
     @keyframes wave {
       0% { height: 6px; }
@@ -371,7 +364,7 @@
         <div class="pulse-ring ring-3"></div>
         <div class="avatar-box" id="avatarBox">
           <div class="avatar-inner">
-            <svg class="athena-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="athena-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M12 2a8 8 0 0 0-8 8c0 5 8 12 8 12s8-7 8-12a8 8 0 0 0-8-8z"></path>
               <circle cx="12" cy="10" r="3"></circle>
             </svg>
@@ -384,21 +377,13 @@
       <p class="bot-status" id="botStatus">🎙️ Đang lắng nghe Thầy Minh...</p>
 
       <div class="visualizer" id="visualizer">
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
+        <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+        <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+        <span class="bar"></span><span class="bar"></span><span class="bar"></span>
       </div>
 
       <div class="transcript-box" id="transcriptBox">
-        <div class="transcript-message bot" id="botMessage">
-          "Chào Thầy Minh! Em là Athena, em đang nghe Thầy nói qua cuộc gọi đây ạ..."
-        </div>
+        <div class="transcript-message bot" id="botMessage">"Chào Thầy Minh! Em là Athena, em đang nghe Thầy nói qua cuộc gọi đây ạ..."</div>
         <div class="transcript-message user" id="userMessage" style="display: none;"></div>
       </div>
     </main>
@@ -406,7 +391,7 @@
     <!-- Controls -->
     <footer class="call-controls">
       <button class="control-btn" id="muteBtn" title="Bật/Tắt Micro">
-        <svg id="micIcon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
           <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
           <line x1="12" y1="19" x2="12" y2="23"></line>
@@ -422,8 +407,8 @@
         <span class="btn-label">Cúp máy</span>
       </button>
 
-      <button class="control-btn" id="speakTestBtn" title="Nói lại">
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button class="control-btn" id="speakTestBtn" title="Phát tiếng">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
         </svg>
@@ -431,6 +416,8 @@
       </button>
     </footer>
   </div>
+
+  <audio id="ttsAudio" preload="auto" playsinline></audio>
 
   <script>
     const tg = window.Telegram?.WebApp;
@@ -448,72 +435,122 @@
     const muteBtn = document.getElementById('muteBtn');
     const endCallBtn = document.getElementById('endCallBtn');
     const speakTestBtn = document.getElementById('speakTestBtn');
+    const ttsAudio = document.getElementById('ttsAudio');
 
     let isMuted = false;
     let isSpeaking = false;
     let isProcessing = false;
     let callDuration = 0;
-    let timerInterval = null;
     let recognition = null;
     let recognitionActive = false;
+    let vietnameseVoice = null;
 
     // Timer
-    timerInterval = setInterval(() => {
+    setInterval(() => {
       callDuration++;
-      const m = String(Math.floor(callDuration / 60)).padStart(2, '0');
-      const s = String(callDuration % 60).padStart(2, '0');
-      callTimerEl.textContent = `${m}:${s}`;
+      callTimerEl.textContent = `${String(Math.floor(callDuration/60)).padStart(2,'0')}:${String(callDuration%60).padStart(2,'0')}`;
     }, 1000);
 
-    // Vietnamese Speech Engine (TTS)
-    function speakVietnamese(text) {
+    // Find best Vietnamese voice from browser
+    function initVoices() {
       if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'vi-VN';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.05;
-
       const voices = window.speechSynthesis.getVoices();
-      const viVoice = voices.find(v => v.lang.includes('vi') || v.lang.includes('VI'));
-      if (viVoice) utterance.voice = viVoice;
-
-      utterance.onstart = () => {
-        isSpeaking = true;
-        setSpeakingState();
-        if (recognition && recognitionActive) {
-          try { recognition.stop(); } catch(e){}
-        }
-      };
-
-      utterance.onend = () => {
-        isSpeaking = false;
-        isProcessing = false;
-        setListeningState();
-        if (recognition && !isMuted) {
-          try { recognition.start(); } catch(e){}
-        }
-      };
-
-      utterance.onerror = () => {
-        isSpeaking = false;
-        isProcessing = false;
-        setListeningState();
-      };
-
-      window.speechSynthesis.speak(utterance);
+      vietnameseVoice = voices.find(v => v.lang === 'vi-VN' || v.lang === 'vi_VN') ||
+                        voices.find(v => v.lang.toLowerCase().startsWith('vi')) ||
+                        voices.find(v => v.name.toLowerCase().includes('vietnam') || v.name.toLowerCase().includes('hoaimy') || v.name.toLowerCase().includes('namminh'));
+    }
+    if ('speechSynthesis' in window) {
+      initVoices();
+      window.speechSynthesis.onvoiceschanged = initVoices;
     }
 
-    // Speech Recognition (STT - Tiếng Việt)
+    // High quality Vietnamese Speech Synthesis
+    function speakVietnamese(text) {
+      if (isSpeaking) return;
+      isSpeaking = true;
+      setSpeakingState();
+
+      if (recognition && recognitionActive) {
+        try { recognition.stop(); } catch(e){}
+      }
+
+      // Priority 1: Google Native Vietnamese Audio Stream (100% chuẩn tiếng Việt, ngữ điệu tự nhiên, không cần cài đặt thêm)
+      try {
+        const clean = encodeURIComponent(text.trim());
+        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${clean}`;
+        
+        ttsAudio.src = audioUrl;
+        const playPromise = ttsAudio.play();
+
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            // Audio started playing
+          }).catch(() => {
+            // If audio blocked or failed, fallback to SpeechSynthesis
+            fallbackSpeechSynthesis(text);
+          });
+        }
+      } catch (err) {
+        fallbackSpeechSynthesis(text);
+      }
+    }
+
+    ttsAudio.onended = () => {
+      isSpeaking = false;
+      isProcessing = false;
+      setListeningState();
+      restartRecognition();
+    };
+
+    ttsAudio.onerror = () => {
+      // If audio element failed, fallback to SpeechSynthesis
+      fallbackSpeechSynthesis(botMessageEl.textContent.replace(/"/g, ''));
+    };
+
+    function fallbackSpeechSynthesis(text) {
+      if (!('speechSynthesis' in window)) {
+        isSpeaking = false;
+        setListeningState();
+        restartRecognition();
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'vi-VN';
+      u.rate = 1.0;
+      u.pitch = 1.05;
+      if (vietnameseVoice) u.voice = vietnameseVoice;
+
+      u.onend = () => {
+        isSpeaking = false;
+        isProcessing = false;
+        setListeningState();
+        restartRecognition();
+      };
+      u.onerror = () => {
+        isSpeaking = false;
+        isProcessing = false;
+        setListeningState();
+        restartRecognition();
+      };
+      window.speechSynthesis.speak(u);
+    }
+
+    function restartRecognition() {
+      if (recognition && !isMuted && !recognitionActive) {
+        try { recognition.start(); } catch(e){}
+      }
+    }
+
+    // Speech Recognition (Tiếng Việt)
     function startSpeechRecognition() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        botStatusEl.textContent = "Thiết bị chưa hỗ trợ nhận diện giọng nói trực tiếp.";
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        botStatusEl.textContent = "Thiết bị chưa hỗ trợ Web Speech trực tiếp.";
         return;
       }
 
-      recognition = new SpeechRecognition();
+      recognition = new SR();
       recognition.lang = 'vi-VN';
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -523,26 +560,18 @@
         if (!isSpeaking && !isProcessing) setListeningState();
       };
 
-      recognition.onresult = (event) => {
+      recognition.onresult = (ev) => {
         if (isSpeaking || isProcessing) return;
-
-        let interim = '';
-        let final = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
-          }
+        let final = '', interim = '';
+        for (let i = ev.resultIndex; i < ev.results.length; ++i) {
+          if (ev.results[i].isFinal) final += ev.results[i][0].transcript;
+          else interim += ev.results[i][0].transcript;
         }
-
         const heard = (final || interim).trim();
         if (heard) {
           userMessageEl.style.display = 'block';
           userMessageEl.textContent = `Thầy: "${heard}"`;
         }
-
         if (final.trim().length > 1) {
           handleUserVoice(final.trim());
         }
@@ -564,25 +593,25 @@
       try { recognition.start(); } catch(e){}
     }
 
-    // Conversational Logic
+    // Conversational Logic (Tiếng Việt thông minh cho Thầy Minh)
     function handleUserVoice(text) {
       if (isProcessing) return;
       isProcessing = true;
       setProcessingState();
 
       let reply = "Dạ Thầy Minh, em đã ghi nhận ý kiến của Thầy rồi ạ.";
-      const lower = text.toLowerCase();
+      const low = text.toLowerCase();
 
-      if (lower.includes("chào") || lower.includes("alo") || lower.includes("ơi")) {
+      if (low.includes("chào") || low.includes("alo") || low.includes("ơi")) {
         reply = "Dạ, em chào Thầy Minh! Em đang lắng nghe Thầy trao đổi đây ạ.";
-      } else if (lower.includes("vi sinh") || lower.includes("dự án") || lower.includes("phản biện")) {
-        reply = "Dạ Thầy, phiếu phản biện dự án vi sinh đã được em cập nhật đầy đủ các tiêu chí khoa học, Thầy muốn em tóm tắt phần nào ạ?";
-      } else if (lower.includes("khỏe không") || lower.includes("thế nào")) {
-        reply = "Dạ em luôn sẵn sàng 24/7 để hỗ trợ Thầy ạ. Thầy có cần em tra cứu hồ sơ nào không ạ?";
-      } else if (lower.includes("cảm ơn") || lower.includes("tốt")) {
-        reply = "Dạ, được đồng hành cùng Thầy là vinh hạnh của em ạ!";
+      } else if (low.includes("vi sinh") || low.includes("dự án") || low.includes("phản biện")) {
+        reply = "Dạ Thầy, phiếu phản biện dự án vi sinh đã được em cập nhật đầy đủ tiêu chí khoa học, Thầy cần em tóm tắt phần nào ạ?";
+      } else if (low.includes("khỏe không") || low.includes("thế nào")) {
+        reply = "Dạ em luôn sẵn sàng 24/7 để hỗ trợ Thầy ạ. Công việc hôm nay của Thầy thế nào rồi ạ?";
+      } else if (low.includes("cảm ơn") || low.includes("tốt lắm") || low.includes("ok")) {
+        reply = "Dạ, được hỗ trợ Thầy là niềm vui của em ạ!";
       } else {
-        reply = `Dạ Thầy Minh, về nội dung "${text}", em đã lưu vào hồ sơ và sẵn sàng thực hiện theo chỉ đạo của Thầy ạ.`;
+        reply = `Dạ Thầy Minh, về nội dung ${text}, em đã nắm rõ và đang xử lý theo chỉ đạo của Thầy ạ.`;
       }
 
       botMessageEl.textContent = `"${reply}"`;
@@ -614,20 +643,21 @@
       if (isMuted) {
         muteBtn.classList.add('active');
         document.getElementById('micLabel').textContent = "Đã tắt";
-        if (recognition) try { recognition.stop(); } catch(e){}
+        if (recognition) try{recognition.stop();}catch(e){}
         botStatusEl.textContent = "Micro đã tắt.";
       } else {
         muteBtn.classList.remove('active');
         document.getElementById('micLabel').textContent = "Micro";
-        if (recognition && !isSpeaking) try { recognition.start(); } catch(e){}
+        if (recognition && !isSpeaking) try{recognition.start();}catch(e){}
         setListeningState();
       }
     });
 
     endCallBtn.addEventListener('click', () => {
       clearInterval(timerInterval);
-      window.speechSynthesis.cancel();
-      if (recognition) try { recognition.stop(); } catch(e){}
+      ttsAudio.pause();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (recognition) try{recognition.stop();}catch(e){}
       botStatusEl.textContent = "Cuộc gọi đã kết thúc.";
       setTimeout(() => {
         if (tg) tg.close();
@@ -643,12 +673,12 @@
       speakVietnamese("Dạ Thầy, em đang nghe Thầy nói đây ạ.");
     });
 
-    // Auto init
+    // Auto-init on load
     window.addEventListener('DOMContentLoaded', () => {
       startSpeechRecognition();
       setTimeout(() => {
         speakVietnamese("Chào Thầy Minh! Em là Athena, em đang nghe Thầy nói qua cuộc gọi đây ạ.");
-      }, 1200);
+      }, 1000);
     });
   </script>
 </body>
