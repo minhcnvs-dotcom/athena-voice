@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Athena Voice Call 24/7</title>
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="call-container">
+    <!-- Header -->
+    <header class="call-header">
+      <div class="caller-meta">
+        <span class="live-dot"></span>
+        <span class="connection-status" id="connectionStatus">Athena Cloud 24/7</span>
+      </div>
+      <div class="call-timer" id="callTimer">00:00</div>
+    </header>
+
+    <!-- Main Avatar & Pulse Visualizer -->
+    <main class="call-body">
+      <div class="avatar-wrapper">
+        <div class="pulse-ring ring-1"></div>
+        <div class="pulse-ring ring-2"></div>
+        <div class="pulse-ring ring-3"></div>
+        <div class="avatar-glow"></div>
+        <div class="avatar-box" id="avatarBox">
+          <div class="avatar-inner">
+            <svg class="athena-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a8 8 0 0 0-8 8c0 5 8 12 8 12s8-7 8-12a8 8 0 0 0-8-8z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+            <span class="avatar-name">ATHENA</span>
+          </div>
+        </div>
+      </div>
+
+      <h1 class="bot-name">Athena</h1>
+      <p class="bot-status" id="botStatus">Đang lắng nghe Thầy Minh...</p>
+
+      <!-- Audio Visualizer Wave -->
+      <div class="visualizer" id="visualizer">
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+      </div>
+
+      <!-- Dialogue Subtitles Box -->
+      <div class="transcript-box" id="transcriptBox">
+        <div class="transcript-message bot" id="botMessage">
+          "Chào Thầy Minh! Em là Athena, em đang nghe Thầy nói qua cuộc gọi đây ạ..."
+        </div>
+        <div class="transcript-message user" id="userMessage" style="display: none;"></div>
+      </div>
+    </main>
+
+    <!-- Controls -->
+    <footer class="call-controls">
+      <!-- Mute Mic Button -->
+      <button class="control-btn" id="muteBtn" title="Bật/Tắt Micro" aria-label="Mute Microphone">
+        <svg id="micIcon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <span class="btn-label" id="micLabel">Micro</span>
+      </button>
+
+      <!-- End Call Button -->
+      <button class="control-btn end-call" id="endCallBtn" title="Cúp máy" aria-label="End Call">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor">
+          <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.58.9-1 .47-1.92 1.1-2.73 1.87-.2.2-.49.31-.79.31-.3 0-.59-.11-.8-.32L.38 13.46a1.13 1.13 0 0 1 0-1.6c3.15-3.03 7.42-4.86 11.62-4.86s8.47 1.83 11.62 4.86c.44.44.44 1.16 0 1.6l-2.12 2.12c-.21.21-.5.32-.8.32-.3 0-.59-.11-.79-.31-.81-.77-1.73-1.4-2.73-1.87-.35-.16-.58-.51-.58-.9v-3.1c-1.45-.47-3-.72-4.6-.72z"/>
+        </svg>
+        <span class="btn-label">Cúp máy</span>
+      </button>
+
+      <!-- Speaker Button -->
+      <button class="control-btn" id="speakerBtn" title="Loa thoại" aria-label="Speaker">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <span class="btn-label" id="speakerLabel">Loa</span>
+      </button>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
