@@ -1,0 +1,669 @@
+// Initialize Telegram WebApp
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.enableClosingConfirmation();
+}
+
+// Elements
+const callContainer = document.querySelector('.call-container');
+const callTimerEl = document.getElementById('callTimer');
+const botStatusEl = document.getElementById('botStatus');
+const botMessageEl = document.getElementById('botMessage');
+const userMessageEl = document.getElementById('userMessage');
+const muteBtn = document.getElementById('muteBtn');
+const endCallBtn = document.getElementById('endCallBtn');
+
+// State
+let isMuted = false;
+let isSpeaking = false;
+let isProcessing = false;
+let callDuration = 0;
+let timerInterval = null;
+let recognition = null;
+let recognitionActive = false;
+
+// Call Timer
+function startTimer() {
+  timerInterval = setInterval(() => {
+    callDuration++;
+    const minutes = String(Math.floor(callDuration / 60)).padStart(2, '0');
+    const seconds = String(callDuration % 60).padStart(2, '0');
+    callTimerEl.textContent = `${minutes}:${seconds}`;
+  }, 1000);
+}
+
+// Vietnamese Speech Synthesis
+function speakVietnamese(text) {
+  if (!('speechSynthesis' in window)) {
+    console.warn("Trình duyệt không hỗ trợ SpeechSynthesis");
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'vi-VN';
+  utterance.rate = 1.05;
+  utterance.pitch = 1.0;
+
+  // Find best Vietnamese voice
+  const voices = window.speechSynthesis.getVoices();
+  const viVoice = voices.find(v => v.lang.includes('vi') || v.lang.includes('VIE'));
+  if (viVoice) utterance.voice = viVoice;
+
+  utterance.onstart = () => {
+    isSpeaking = true;
+    setSpeakingState();
+    if (recognition && recognitionActive) {
+      try { recognition.stop(); } catch (e) {}
+    }
+  };
+
+  utterance.onend = () => {
+    isSpeaking = false;
+    isProcessing = false;
+    setListeningState();
+    if (recognition && !isMuted) {
+      try { recognition.start(); } catch (e) {}
+    }
+  };
+
+  utterance.onerror = () => {
+    isSpeaking = false;
+    isProcessing = false;
+    setListeningState();
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// Setup Speech Recognition
+function setupSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    botStatusEl.textContent = "Thiết bị không hỗ trợ Web Speech. Vui lòng thử trên Chrome hoặc Safari.";
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = 'vi-VN';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    recognitionActive = true;
+    if (!isSpeaking && !isProcessing) setListeningState();
+  };
+
+  recognition.onresult = (event) => {
+    if (isSpeaking || isProcessing) return;
+
+    let interimTranscript = '';
+    let finalTranscript = '';
+
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interimTranscript += event.results[i][0].transcript;
+      }
+    }
+
+    const currentText = (finalTranscript || interimTranscript).trim();
+    if (currentText) {
+      userMessageEl.style.display = 'block';
+      userMessageEl.textContent = `Thầy: "${currentText}"`;
+    }
+
+    if (finalTranscript.trim().length > 1) {
+      processUserSpeech(finalTranscript.trim());
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.warn("Speech recognition error:", e);
+    if (e.error === 'not-allowed') {
+      botStatusEl.textContent = "Vui lòng cấp quyền Micro trong Telegram!";
+    }
+  };
+
+  recognition.onend = () => {
+    recognitionActive = false;
+    if (!isSpeaking && !isProcessing && !isMuted) {
+      try { recognition.start(); } catch (e) {}
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch (e) {}
+}
+
+// Conversation Logic
+async function processUserSpeech(text) {
+  if (isProcessing) return;
+  isProcessing = true;
+  setProcessingState();
+
+  // Natural responses for Athena
+  let reply = "Dạ Thầy Minh, em đã ghi nhận ý kiến của Thầy và đang tiến hành xử lý ạ.";
+  const lower = text.toLowerCase();
+
+  if (lower.includes("chào") || lower.includes("alo") || lower.includes("ơi")) {
+    reply = "Dạ, em chào Thầy Minh! Em đang lắng nghe Thầy trao đổi đây ạ.";
+  } else if (lower.includes("vi sinh") || lower.includes("dự án") || lower.includes("phản biện")) {
+    reply = "Dạ Thầy, phiếu phản biện dự án vi sinh đã được em cập nhật các tiêu chí khoa học, Thầy cần em bổ sung phần nào không ạ?";
+  } else if (lower.includes("khỏe không") || lower.includes("thế nào")) {
+    reply = "Dạ em luôn sẵn sàng 24/7 để đồng hành cùng Thầy ạ. Công việc hôm nay của Thầy thế nào rồi ạ?";
+  } else if (lower.includes("cảm ơn") || lower.includes("tốt lắm")) {
+    reply = "Dạ, được hỗ trợ Thầy là niềm vui của em ạ!";
+  } else {
+    reply = `Dạ Thầy, em hiểu rồi ạ. Về nội dung "${text}", em sẽ đối chiếu ngay với hồ sơ dự án ạ.`;
+  }
+
+  botMessageEl.textContent = `"${reply}"`;
+  speakVietnamese(reply);
+}
+
+// State Handlers
+function setListeningState() {
+  callContainer.classList.remove('speaking');
+  callContainer.classList.add('listening');
+  botStatusEl.textContent = "🎙️ Đang lắng nghe Thầy Minh...";
+  botStatusEl.style.color = "#38bdf8";
+}
+
+function setSpeakingState() {
+  callContainer.classList.remove('listening');
+  callContainer.classList.add('speaking');
+  botStatusEl.textContent = "🤖 Athena đang trả lời...";
+  botStatusEl.style.color = "#a855f7";
+}
+
+function setProcessingState() {
+  callContainer.classList.remove('listening', 'speaking');
+  botStatusEl.textContent = "⚡ Athena đang xử lý...";
+  botStatusEl.style.color = "#f59e0b";
+}
+
+// Mute Button
+muteBtn.addEventListener('click', () => {
+  isMuted = !isMuted;
+  if (isMuted) {
+    muteBtn.classList.add('active');
+    document.getElementById('micLabel').textContent = "Đã tắt";
+    if (recognition) try { recognition.stop(); } catch (e) {}
+    botStatusEl.textContent = "Micro đã tắt.";
+  } else {
+    muteBtn.classList.remove('active');
+    document.getElementById('micLabel').textContent = "Micro";
+    if (recognition && !isSpeaking) try { recognition.start(); } catch (e) {}
+    setListeningState();
+  }
+});
+
+// End Call Button
+endCallBtn.addEventListener('click', () => {
+  clearInterval(timerInterval);
+  window.speechSynthesis.cancel();
+  if (recognition) try { recognition.stop(); } catch (e) {}
+  botStatusEl.textContent = "Cuộc gọi đã kết thúc.";
+  setTimeout(() => {
+    if (tg) tg.close();
+    else window.close();
+  }, 500);
+});
+
+// Start
+window.addEventListener('DOMContentLoaded', () => {
+  startTimer();
+  setupSpeechRecognition();
+  setTimeout(() => {
+    speakVietnamese("Chào Thầy Minh! Em là Athena, em sẵn sàng trao đổi cùng Thầy qua giọng nói rồi ạ.");
+  }, 1000);
+});
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Athena Voice Call 24/7</title>
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="call-container">
+    <!-- Header -->
+    <header class="call-header">
+      <div class="caller-meta">
+        <span class="live-dot"></span>
+        <span class="connection-status" id="connectionStatus">Athena Cloud 24/7</span>
+      </div>
+      <div class="call-timer" id="callTimer">00:00</div>
+    </header>
+
+    <!-- Main Avatar & Pulse Visualizer -->
+    <main class="call-body">
+      <div class="avatar-wrapper">
+        <div class="pulse-ring ring-1"></div>
+        <div class="pulse-ring ring-2"></div>
+        <div class="pulse-ring ring-3"></div>
+        <div class="avatar-glow"></div>
+        <div class="avatar-box" id="avatarBox">
+          <div class="avatar-inner">
+            <svg class="athena-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a8 8 0 0 0-8 8c0 5 8 12 8 12s8-7 8-12a8 8 0 0 0-8-8z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+            <span class="avatar-name">ATHENA</span>
+          </div>
+        </div>
+      </div>
+
+      <h1 class="bot-name">Athena</h1>
+      <p class="bot-status" id="botStatus">Đang lắng nghe Thầy Minh...</p>
+
+      <!-- Audio Visualizer Wave -->
+      <div class="visualizer" id="visualizer">
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+      </div>
+
+      <!-- Dialogue Subtitles Box -->
+      <div class="transcript-box" id="transcriptBox">
+        <div class="transcript-message bot" id="botMessage">
+          "Chào Thầy Minh! Em là Athena, em đang nghe Thầy nói qua cuộc gọi đây ạ..."
+        </div>
+        <div class="transcript-message user" id="userMessage" style="display: none;"></div>
+      </div>
+    </main>
+
+    <!-- Controls -->
+    <footer class="call-controls">
+      <!-- Mute Mic Button -->
+      <button class="control-btn" id="muteBtn" title="Bật/Tắt Micro" aria-label="Mute Microphone">
+        <svg id="micIcon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <span class="btn-label" id="micLabel">Micro</span>
+      </button>
+
+      <!-- End Call Button -->
+      <button class="control-btn end-call" id="endCallBtn" title="Cúp máy" aria-label="End Call">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor">
+          <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.58.9-1 .47-1.92 1.1-2.73 1.87-.2.2-.49.31-.79.31-.3 0-.59-.11-.8-.32L.38 13.46a1.13 1.13 0 0 1 0-1.6c3.15-3.03 7.42-4.86 11.62-4.86s8.47 1.83 11.62 4.86c.44.44.44 1.16 0 1.6l-2.12 2.12c-.21.21-.5.32-.8.32-.3 0-.59-.11-.79-.31-.81-.77-1.73-1.4-2.73-1.87-.35-.16-.58-.51-.58-.9v-3.1c-1.45-.47-3-.72-4.6-.72z"/>
+        </svg>
+        <span class="btn-label">Cúp máy</span>
+      </button>
+
+      <!-- Speaker Button -->
+      <button class="control-btn" id="speakerBtn" title="Loa thoại" aria-label="Speaker">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <span class="btn-label" id="speakerLabel">Loa</span>
+      </button>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
+:root {
+  --bg-gradient: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0f172a 50%, #030712 100%);
+  --accent-cyan: #38bdf8;
+  --accent-violet: #818cf8;
+  --accent-glow: rgba(56, 189, 248, 0.4);
+  --card-bg: rgba(255, 255, 255, 0.05);
+  --card-border: rgba(255, 255, 255, 0.1);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --danger: #ef4444;
+  --danger-glow: rgba(239, 68, 68, 0.5);
+  --success: #10b981;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg-gradient);
+  color: var(--text-main);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.call-container {
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px 20px env(safe-area-inset-bottom, 24px) 20px;
+  position: relative;
+}
+
+/* Header */
+.call-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 40px;
+}
+
+.caller-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-dot {
+  width: 10px;
+  height: 10px;
+  background-color: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--success);
+  animation: pulse-dot 1.8s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.connection-status {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: #e2e8f0;
+}
+
+.call-timer {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  background: rgba(56, 189, 248, 0.1);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Body & Pulsing Avatar */
+.call-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 16px 0;
+}
+
+.avatar-wrapper {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.avatar-box {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 30px var(--accent-glow);
+  position: relative;
+  z-index: 5;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.avatar-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #ffffff;
+}
+
+.athena-icon {
+  width: 44px;
+  height: 44px;
+}
+
+.avatar-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.pulse-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-cyan);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Animation states */
+.speaking .ring-1 {
+  width: 150px;
+  height: 150px;
+  animation: ripple 2s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+.speaking .ring-2 {
+  width: 180px;
+  height: 180px;
+  animation: ripple 2s cubic-bezier(0.1, 0.8, 0.3, 1) 0.6s infinite;
+}
+
+.speaking .ring-3 {
+  width: 210px;
+  height: 210px;
+  animation: ripple 2s cubic-bezier(0.1, 0.8, 0.3, 1) 1.2s infinite;
+}
+
+.listening .avatar-box {
+  box-shadow: 0 0 45px rgba(56, 189, 248, 0.7);
+  transform: scale(1.05);
+}
+
+@keyframes ripple {
+  0% { transform: scale(0.7); opacity: 0.9; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.bot-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, #fff 40%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bot-status {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+/* Visualizer Wave */
+.visualizer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  margin-bottom: 20px;
+}
+
+.visualizer .bar {
+  width: 4px;
+  height: 6px;
+  background: var(--accent-cyan);
+  border-radius: 4px;
+  transition: height 0.15s ease, background 0.3s;
+}
+
+.speaking .visualizer .bar {
+  animation: wave 0.8s ease-in-out infinite alternate;
+}
+
+.speaking .visualizer .bar:nth-child(1) { animation-delay: 0.1s; }
+.speaking .visualizer .bar:nth-child(2) { animation-delay: 0.3s; }
+.speaking .visualizer .bar:nth-child(3) { animation-delay: 0.2s; }
+.speaking .visualizer .bar:nth-child(4) { animation-delay: 0.4s; }
+.speaking .visualizer .bar:nth-child(5) { animation-delay: 0.2s; }
+.speaking .visualizer .bar:nth-child(6) { animation-delay: 0.5s; }
+.speaking .visualizer .bar:nth-child(7) { animation-delay: 0.1s; }
+.speaking .visualizer .bar:nth-child(8) { animation-delay: 0.3s; }
+.speaking .visualizer .bar:nth-child(9) { animation-delay: 0.2s; }
+
+@keyframes wave {
+  0% { height: 6px; }
+  100% { height: 28px; background: #a855f7; }
+}
+
+/* Subtitles Transcript Box */
+.transcript-box {
+  width: 100%;
+  min-height: 80px;
+  max-height: 120px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 18px;
+  padding: 14px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transcript-message {
+  font-size: 14px;
+  line-height: 1.5;
+  transition: opacity 0.2s ease;
+}
+
+.transcript-message.bot {
+  color: #e2e8f0;
+  font-style: italic;
+}
+
+.transcript-message.user {
+  color: var(--accent-cyan);
+  font-weight: 500;
+}
+
+/* Controls */
+.call-controls {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 18px 24px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 48px;
+}
+
+.control-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.control-btn:active {
+  transform: scale(0.92);
+}
+
+.control-btn .btn-label {
+  position: absolute;
+  bottom: -22px;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.control-btn.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.control-btn.end-call {
+  background: var(--danger);
+  border-color: transparent;
+  color: #ffffff;
+  width: 68px;
+  height: 68px;
+  box-shadow: 0 8px 25px var(--danger-glow);
+}
+
+.control-btn.end-call:hover {
+  background: #dc2626;
+}
+
+.control-btn.end-call .btn-label {
+  color: #f87171;
+  font-weight: 600;
+}
